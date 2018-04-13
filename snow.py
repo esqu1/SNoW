@@ -2,13 +2,21 @@ from sklearn.datasets import fetch_20newsgroups
 from sklearn import svm
 import numpy as np
 from nltk.stem.porter import PorterStemmer
-from nltk.corpus import stopwords, treebank, wordnet
+from nltk.corpus import stopwords, wordnet
 from collections import Counter
 import re
 import sys
+import random
+import pickle
 
-target_words = ['stocks', 'funds', 'bonds', 'shares', 'assets', 'securities', 'investments', 'accounts', 'deposits', 'certificates',
-                'managers', 'directors', 'executives', 'officers', 'authorities', 'experts', 'specialists', 'scientists', 'researchers', 'leaders']
+#target_words = ['stocks', 'funds', 'bonds', 'shares', 'assets', 'securities', 'investments', 'accounts', 'deposits', 'certificates',
+#                'managers', 'directors', 'executives', 'officers', 'authorities', 'experts', 'specialists', 'scientists', 'researchers', 'leaders']
+
+target_words = ['government', 'university', 'church', 'people', 'american', 'turkish', 'college', 'division', 'israeli', 'clipper',
+                'military']
+
+confusion_set = ['computer', 'information', 'version', 'evidence', 'president', 'algorithm' , 'hardware', 'software', 'technical', 'numbers',
+                 'package', 'network', 'driver', 'graphics', 'internet', 'display', 'server', 'engineering', 'machine', 'memory']
 
 newsgroups_train = fetch_20newsgroups(subset='train')
 newsgroups_test = fetch_20newsgroups(subset='test')
@@ -46,13 +54,72 @@ def popular_words():
             del cnt[word]
     b = cnt.keys()
     for word in b:
-        if len(word) == 1 or not word.isalpha() or not word in nouns:
+        if len(word) == 1 or not word.isalpha() or not word in nouns or len(word) < 6:
             del cnt[word]
     return cnt.most_common(100)
 
-def extract_features(data, size): 
+def extract_features(data, word):
+    examples = []
+    filtered = [re.sub(r'[^\w\s]','',s) for s in data if word in map(lambda x: re.sub(r'[^\w\s]','',x), s.split())]
+    for q, example in enumerate(filtered):
+        example_split = example.split()
+        # do something that converts example into a boolean vector
+        k = example_split.index(word)
+        #print example_split[k-3:k+4]
+        example_split = map(lambda x: x.lower(), map(p.stem, example_split))
+        counter, l = 0, k - 1
+        window = []
+        while counter < 3:
+            if l < 0:
+                window = [-1] * (3 - counter) + window
+                break
+            elif example_split[l] not in vocabulary:
+                l -= 1
+            else:
+                window = [example_split[l]] + window
+                l -= 1
+                counter += 1
+        counter, l = 0, k + 1
+        while counter < 3:
+            if l >= len(example_split):
+                window = window + [-1] * (3 - counter)
+                break
+            elif example_split[l] not in vocabulary:
+                l += 1
+            else:
+                window = window + [example_split[l]]
+                l += 1
+                counter += 1
+        indices = []
+        for index in window:
+            try:
+                indices.append(inverse_vocab[index])
+            except:
+                indices.append(-1)
+        # convert to a sparse vector
+        example_features = []
+        for j in indices:
+            example_features += sparse(len(vocabulary), j)
+        examples.append(example_features)
+    return {word: examples}
 
-    T = target_words[:size]
+def pickle_words():
+    d = {}
+    for target in target_words:
+        d.update(extract_features(newsgroups_train.data, target))
+    with open('target_train.pkl', 'wb') as f:
+        pickle.dump(d, f)
+    d = {}
+    for c in confusion_set:
+        d.update(extract_features(newsgroups_train.data, c))
+    with open('confusion_train.pkl', 'wb') as f:
+        pickle.dump(d, f)
+
+def something_else(data, word, size): 
+
+    #T = target_words[:size]
+    T = random.sample(confusion_set, size - 1)
+    T.append(word)
     examples = []
     y = []
 
@@ -70,7 +137,7 @@ def extract_features(data, size):
                 if l < 0:
                     window = [-1] * (3 - counter) + window
                     break
-                elif example_split[l] not in vocabulary: # or example_split[l] in stopwords.words('english'):
+                elif example_split[l] not in vocabulary:
                     l -= 1
                 else:
                     window = [example_split[l]] + window
@@ -81,29 +148,29 @@ def extract_features(data, size):
                 if l >= len(example_split):
                     window = window + [-1] * (3 - counter)
                     break
-                elif example_split[l] not in vocabulary: # or example_split[l] in stopwords.words('english'):
+                elif example_split[l] not in vocabulary:
                     l += 1
                 else:
                     window = window + [example_split[l]]
                     l += 1
                     counter += 1
-            #window = example.split()[max(k-3, 0): min(k + 4, len(example))]
-            #print len(window)
             indices = []
             for index in window:
-                try:   
+                try:
                     indices.append(inverse_vocab[index])
                 except:
                     indices.append(-1)
-
-            #print map(lambda x: vocabulary[x], indices)
-            #indices = map(lambda x: inverse_vocab[x], window)
             # convert to a sparse vector
             example_features = []
             for j in indices:
                 example_features += sparse(len(vocabulary), j)
             examples.append(example_features)
-            y.append(inverse_vocab[i])
+            #y.append(inverse_vocab[i])
+            if i != word:
+                y.append(-1)
+            else:
+                y.append(1)
+
     return examples, y
 
 def main():
@@ -127,4 +194,4 @@ def main():
 
 #main()
 
-print popular_words()
+print pickle_words()
