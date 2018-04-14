@@ -8,10 +8,9 @@ import re
 import sys
 import random
 import pickle
+import sqlite3
 
-#target_words = ['stocks', 'funds', 'bonds', 'shares', 'assets', 'securities', 'investments', 'accounts', 'deposits', 'certificates',
-#                'managers', 'directors', 'executives', 'officers', 'authorities', 'experts', 'specialists', 'scientists', 'researchers', 'leaders']
-
+# List of target words, and words that will be incorporated into confusion set
 target_words = ['government', 'university', 'church', 'people', 'american', 'turkish', 'college', 'division', 'israeli', 'clipper',
                 'military']
 
@@ -104,16 +103,16 @@ def extract_features(data, word):
     return {word: examples}
 
 def pickle_words():
-    d = {}
     for target in target_words:
+        d = {}
         d.update(extract_features(newsgroups_train.data, target))
-    with open('target_train.pkl', 'wb') as f:
-        pickle.dump(d, f)
-    d = {}
+        with open('%s.pkl' % target, 'wb') as f:
+            pickle.dump(d, f)
     for c in confusion_set:
+        d = {}
         d.update(extract_features(newsgroups_train.data, c))
-    with open('confusion_train.pkl', 'wb') as f:
-        pickle.dump(d, f)
+        with open('%s.pkl' % c,'wb') as f:
+            pickle.dump(d, f)
 
 def something_else(data, word, size): 
 
