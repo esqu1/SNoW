@@ -5,10 +5,8 @@ from nltk.stem.porter import PorterStemmer
 from nltk.corpus import stopwords, wordnet
 from collections import Counter
 import re
-import sys
-import random
 import pickle
-import sqlite3
+import random 
 
 # List of target words, and words that will be incorporated into confusion set
 target_words = ['government', 'university', 'church', 'people', 'american', 'turkish', 'college', 'division', 'israeli', 'clipper',
@@ -23,17 +21,6 @@ newsgroups_test = fetch_20newsgroups(subset='test')
 
 # Lemmatizer
 p = PorterStemmer()
-
-conn = sqlite3.connect('features.db')
-cur = conn.cursor()
-vocabulary = []
-
-with open('vocabulary.txt') as f:
-    vocabulary = f.read().split()
-
-vocabulary = list(set(map(p.stem, vocabulary))) + target_words
-
-inverse_vocab = {s: i for i, s in enumerate(vocabulary)}
 
 def sparse(n, i):
     zeros = [0] * n
@@ -68,14 +55,13 @@ def popular_words():
             del cnt[word]
     return cnt.most_common(100)
 
-def extract_features(data, word):
+def extract_features(data, word, with_conj=False):
+    vocabulary = set({})
     examples = []
     filtered = [re.sub(r'[^\w\s]','',s) for s in data if word in map(lambda x: re.sub(r'[^\w\s]','',x), s.split())]
     for q, example in enumerate(filtered):
         example_split = example.split()
-        # do something that converts example into a boolean vector
         k = example_split.index(word)
-        #print example_split[k-3:k+4]
         example_split = map(lambda x: x.lower(), map(p.stem, example_split))
         counter, l = 0, k - 1
         window = []
@@ -83,10 +69,9 @@ def extract_features(data, word):
             if l < 0:
                 window = [-1] * (3 - counter) + window
                 break
-            elif example_split[l] not in vocabulary:
-                l -= 1
             else:
                 window = [example_split[l]] + window
+                vocabulary.update([example_split[l]])
                 l -= 1
                 counter += 1
         counter, l = 0, k + 1
@@ -94,65 +79,66 @@ def extract_features(data, word):
             if l >= len(example_split):
                 window = window + [-1] * (3 - counter)
                 break
-            elif example_split[l] not in vocabulary:
-                l += 1
             else:
                 window = window + [example_split[l]]
+                vocabulary.update([example_split[l]])
                 l += 1
                 counter += 1
         indices = []
         for index in window:
-            try:
-                indices.append(inverse_vocab[index])
-            except:
-                indices.append(-1)
-        # convert to a sparse vector
-        # example_features = []
-        # for j in indices:
-        #     example_features += sparse(len(vocabulary), j)
-        # examples.append(example_features)
+            indices.append(vocabulary.find(index))
         examples.append(indices)
-        # print len(example_features)
-    return {word: examples}
+    return {word: examples}, vocabulary
 
 def pickle_words():
-    # conn.execute('CREATE TABLE target_train (third1, second1, first1, first2, second2, third2)')
-    # conn.execute('CREATE TABLE confusion (third1, second1, first1, first2, second2, third2)')
     d = {}
+    vocabulary = set([])
     for target in target_words:
         print target
-        d.update(extract_features(newsgroups_train.data, target))
+        features, v = extract_features(newsgroups_train.data, target)
+        d.update(features)
+        vocabulary.update(v)
     with open('target_train.pkl', 'wb') as f:
         pickle.dump(d, f)
-        # indices = extract_features(newsgroups_train.data, target)
-        # conn.execute('INSERT INTO target_train VALUES (%d, %d, %d, %d, %d, %d)' % (indices[0], indices[1], indices[2], indices[3], indices[4], indices[5]))
     d = {}
     for c in confusion_set:
         print c
-        d.update(extract_features(newsgroups_train.data, c))
+        features, v = extract_features(newsgroups_train.data, c)
+        d.update(features)
+        vocabulary.update(v)
     with open('confusion.pkl','wb') as f:
         pickle.dump(d, f)
+    with open('vocabulary.pkl', 'wb') as f:
+        pickle.dump(vocabulary, f)
+    print "Extraction complete. Length of vocabulary: %d" % len(vocabulary)
     #conn.commit()
 
 def main():
-    X_train = []
-
     with open('target_train.pkl', 'rb') as f:
         target_train_indices = pickle.load(f)
     with open('confusion.pkl', 'rb') as f:
         confusion_train_indices = pickle.load(f)
+    with open('vocabulary.pkl', 'rb') as f:
+        vocabulary = pickle.load(f)
     target_train, confusion_train = {}, {}
     for key in target_train_indices.keys():
         #wrong
         target_train[key] = map(lambda x: create_sparse(len(vocabulary), x), target_train_indices[key])
     for key in confusion_train_indices.keys():
         confusion_train[key] = map(lambda x: create_sparse(len(vocabulary), x), confusion_train_indices[key])
+
     models = []
     for target in target_words:
-        clf = svm.SVC()
-        X = target_train[target]
-        y = np.array([-1] * len(X))
-
+        for i in range(2,20):
+            clf = svm.SVC()
+            X = target_train[target]
+            y = np.array([1] * len(X))
+            confusion_words = random.sample(confusion_set, i)
+            for word in confusion_words:
+                X += confusion_train[word]
+                y = np.append(y, [-1] * len(confusion_train[word]))
+            clf = clf.fit(X, y)
+            print "success: %d" % i
 
 
     # for target in target_words:
