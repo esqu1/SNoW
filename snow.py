@@ -197,6 +197,8 @@ def main():
         confusion_test[key] = map(lambda x: create_sparse(len(vocabulary), x), confusion_test_indices[key])
 
     full_models = []
+    errors = []
+
 
     for target in target_words:
         models = []
@@ -219,10 +221,14 @@ def main():
             test_errors.append(test_error)
             print "success: %d" % i
         full_models.append(models)
+        errors.append(test_errors)
 
     # Write the models to a pickle for future use
     with open('models.pkl', 'wb') as f:
         pickle.dump(full_models, f)
+
+    with open('errors.pkl', 'wb') as f:
+        pickle.dump(errors, f)
 
     # for target in target_words:
     #      += sparse(len(vocabulary), j)
