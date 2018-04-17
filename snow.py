@@ -53,7 +53,7 @@ def popular_words():
             del cnt[word]
     return cnt.most_common(100)
 
-def extract_features(data, word, with_conj=False):
+def extract_features(data, word, with_conj=True):
     vocabulary = []
     examples = []
     conjs = []
@@ -95,10 +95,13 @@ def extract_features(data, word, with_conj=False):
         if with_conj:
             conj_indices = []
             for i in range(len(window) - 1):
-                c = ' '.join(window[i:i + 2])
-                if c not in conjs:
-                    conjs.append(c)
-                conj_indices.append(conjs.index(c))
+                try:
+                    c = ' '.join(window[i:i + 2])
+                    if c not in conjs:
+                        conjs.append(c)
+                    conj_indices.append(conjs.index(c))
+                except TypeError:
+                    conj_indices.append(-1)
             examples.append(indices + conj_indices)
         else:
             examples.append(indices)
@@ -246,5 +249,5 @@ def main():
 #     print 'Test Error: %.4f' % calculate_error(y_test, y_hat)
 
 #main()
-#pickle_words()
-print popular_words()
+pickle_words()
+#print popular_words()
