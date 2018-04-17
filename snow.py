@@ -39,8 +39,6 @@ def calculate_error(y, yhat):
     return len(y[y != yhat]) * 1.0 / len(y)
 
 def popular_words():
-    # generate a list of all nouns
-    nouns = {x.name().split('.', 1)[0] for x in wordnet.all_synsets('n')}
     s = map(lambda x: x.split(), newsgroups_train.data)
     words = []
     for split in s:
@@ -51,13 +49,14 @@ def popular_words():
             del cnt[word]
     b = cnt.keys()
     for word in b:
-        if len(word) == 1 or not word.isalpha() or not word in nouns or len(word) < 6:
+        if len(word) == 1 or not word.isalpha() or len(word) < 6:
             del cnt[word]
     return cnt.most_common(100)
 
 def extract_features(data, word, with_conj=False):
-    vocabulary = set({})
+    vocabulary = []
     examples = []
+    conjs = []
     filtered = [re.sub(r'[^\w\s]','',s) for s in data if word in map(lambda x: re.sub(r'[^\w\s]','',x), s.split())]
     for q, example in enumerate(filtered):
         example_split = example.split()
@@ -71,7 +70,8 @@ def extract_features(data, word, with_conj=False):
                 break
             else:
                 window = [example_split[l]] + window
-                vocabulary.update([example_split[l]])
+                if example_split[l] not in vocabulary:
+                    vocabulary.append(example_split[l])
                 l -= 1
                 counter += 1
         counter, l = 0, k + 1
@@ -81,65 +81,145 @@ def extract_features(data, word, with_conj=False):
                 break
             else:
                 window = window + [example_split[l]]
-                vocabulary.update([example_split[l]])
+                if example_split[l] not in vocabulary:
+                    vocabulary.append(example_split[l])
                 l += 1
                 counter += 1
         indices = []
         for index in window:
-            indices.append(vocabulary.find(index))
-        examples.append(indices)
-    return {word: examples}, vocabulary
+            try: 
+                indices.append(vocabulary.index(index))
+            except ValueError:
+                indices.append(-1)
+
+        if with_conj:
+            conj_indices = []
+            for i in range(len(window) - 1):
+                c = ' '.join(window[i:i + 2])
+                if c not in conjs:
+                    conjs.append(c)
+                conj_indices.append(conjs.index(c))
+            examples.append(indices + conj_indices)
+        else:
+            examples.append(indices)
+
+
+    return {word: examples}, vocabulary, conjs
 
 def pickle_words():
+    # Save the pre-processed feature vectors to a pickle
     d = {}
-    vocabulary = set([])
+    vocabulary = []
+    conjs = []
     for target in target_words:
         print target
-        features, v = extract_features(newsgroups_train.data, target)
+        features, v, c = extract_features(newsgroups_train.data, target)
         d.update(features)
-        vocabulary.update(v)
+        for word in v:
+            if word not in vocabulary:
+                vocabulary.append(word)
+        for conj in c:
+            if conj not in conjs:
+                conjs.append(conj)
     with open('target_train.pkl', 'wb') as f:
         pickle.dump(d, f)
     d = {}
     for c in confusion_set:
         print c
-        features, v = extract_features(newsgroups_train.data, c)
+        features, v, c = extract_features(newsgroups_train.data, c)
         d.update(features)
-        vocabulary.update(v)
-    with open('confusion.pkl','wb') as f:
+        for word in v:
+            if word not in vocabulary:
+                vocabulary.append(word)
+        for conj in c:
+            if conj not in conjs:
+                conjs.append(conj)
+    with open('confusion_train.pkl', 'wb') as f:
         pickle.dump(d, f)
+
+    d = {}
+    for target in target_words:
+        print target
+        features, v, c = extract_features(newsgroups_test.data, target)
+        d.update(features)
+        for word in v:
+            if word not in vocabulary:
+                vocabulary.append(word)
+        for conj in c:
+            if conj not in conjs:
+                conjs.append(conj)
+    with open('target_test.pkl', 'wb') as f:
+        pickle.dump(d, f)
+    d = {}
+    for c in confusion_set:
+        print c
+        features, v, c = extract_features(newsgroups_test.data, c)
+        d.update(features)
+        for word in v:
+            if word not in vocabulary:
+                vocabulary.append(word)
+        for conj in c:
+            if conj not in conjs:
+                conjs.append(conj)
+    with open('confusion_test.pkl','wb') as f:
+        pickle.dump(d, f)
+
     with open('vocabulary.pkl', 'wb') as f:
         pickle.dump(vocabulary, f)
+    with open('conjunctions.pkl', 'wb') as f:
+        pickle.dump(conjs, f)
     print "Extraction complete. Length of vocabulary: %d" % len(vocabulary)
-    #conn.commit()
 
 def main():
     with open('target_train.pkl', 'rb') as f:
         target_train_indices = pickle.load(f)
-    with open('confusion.pkl', 'rb') as f:
+    with open('confusion_train.pkl', 'rb') as f:
         confusion_train_indices = pickle.load(f)
+    with open('target_test.pkl', 'rb') as f:
+        target_test_indices = pickle.load(f)
+    with open('confusion_test.pkl', 'rb') as f:
+        confusion_test_indices = pickle.load(f)
     with open('vocabulary.pkl', 'rb') as f:
         vocabulary = pickle.load(f)
+
     target_train, confusion_train = {}, {}
+    target_test, confusion_test = {}, {}
     for key in target_train_indices.keys():
-        #wrong
         target_train[key] = map(lambda x: create_sparse(len(vocabulary), x), target_train_indices[key])
     for key in confusion_train_indices.keys():
         confusion_train[key] = map(lambda x: create_sparse(len(vocabulary), x), confusion_train_indices[key])
+    for key in target_test_indices.keys():
+        target_test[key] = map(lambda x: create_sparse(len(vocabulary), x), target_test_indices[key])
+    for key in confusion_train_indices.keys():
+        confusion_test[key] = map(lambda x: create_sparse(len(vocabulary), x), confusion_test_indices[key])
 
-    models = []
+    full_models = []
+
     for target in target_words:
-        for i in range(2,20):
+        models = []
+        test_errors = []
+        for i in range(2, 20):
             clf = svm.SVC()
             X = target_train[target]
             y = np.array([1] * len(X))
+            X_test = target_test[target]
+            y_test = np.array([1] * len(X_test))
             confusion_words = random.sample(confusion_set, i)
             for word in confusion_words:
                 X += confusion_train[word]
                 y = np.append(y, [-1] * len(confusion_train[word]))
+                X_test += confusion_test[word]
+                y_test = np.append(y_test, [-1] * len(confusion_test[word]))
             clf = clf.fit(X, y)
+            models.append(clf)
+            test_error = clf.score(X_test, y_test)
+            test_errors.append(test_error)
             print "success: %d" % i
+        full_models.append(models)
 
+    # Write the models to a pickle for future use
+    with open('models.pkl', 'wb') as f:
+        pickle.dump(full_models, f)
 
     # for target in target_words:
     #      += sparse(len(vocabulary), j)
@@ -165,6 +245,6 @@ def main():
 #     print 'Training Error: %.4f' % calculate_error(y_train, y_hat_train)
 #     print 'Test Error: %.4f' % calculate_error(y_test, y_hat)
 
-main()
-
-#print pickle_words()
+#main()
+#pickle_words()
+print popular_words()
