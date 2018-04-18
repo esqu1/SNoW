@@ -135,7 +135,7 @@ def pickle_words():
         for conj in c:
             if conj not in conjs:
                 conjs.append(conj)
-    with open('target_train.pkl', 'wb') as f:
+    with open('data/target_train.pkl', 'wb') as f:
         pickle.dump(d, f)
     d = {}
     for con in confusion_set:
@@ -148,7 +148,7 @@ def pickle_words():
         for conj in c:
             if conj not in conjs:
                 conjs.append(conj)
-    with open('confusion_train.pkl', 'wb') as f:
+    with open('data/confusion_train.pkl', 'wb') as f:
         pickle.dump(d, f)
 
     d = {}
@@ -162,7 +162,7 @@ def pickle_words():
         for conj in c:
             if conj not in conjs:
                 conjs.append(conj)
-    with open('target_test.pkl', 'wb') as f:
+    with open('data/target_test.pkl', 'wb') as f:
         pickle.dump(d, f)
     d = {}
     for con in confusion_set:
@@ -175,28 +175,28 @@ def pickle_words():
         for conj in c:
             if conj not in conjs:
                 conjs.append(conj)
-    with open('confusion_test.pkl', 'wb') as f:
+    with open('data/confusion_test.pkl', 'wb') as f:
         pickle.dump(d, f)
 
-    with open('vocabulary.pkl', 'wb') as f:
+    with open('data/vocabulary.pkl', 'wb') as f:
         pickle.dump(vocabulary, f)
-    with open('conjunctions.pkl', 'wb') as f:
+    with open('data/conjunctions.pkl', 'wb') as f:
         pickle.dump(conjs, f)
     print("Extraction complete. Length of vocabulary: %d" % len(vocabulary))
 
 
 def main():
-    with open('target_train.pkl', 'rb') as f:
+    with open('data/target_train.pkl', 'rb') as f:
         target_train_indices = pickle.load(f)
-    with open('confusion_train.pkl', 'rb') as f:
+    with open('data/confusion_train.pkl', 'rb') as f:
         confusion_train_indices = pickle.load(f)
-    with open('target_test.pkl', 'rb') as f:
+    with open('data/target_test.pkl', 'rb') as f:
         target_test_indices = pickle.load(f)
-    with open('confusion_test.pkl', 'rb') as f:
+    with open('data/confusion_test.pkl', 'rb') as f:
         confusion_test_indices = pickle.load(f)
-    with open('vocabulary.pkl', 'rb') as f:
+    with open('data/vocabulary.pkl', 'rb') as f:
         vocabulary = pickle.load(f)
-    with open('conjunctions.pkl', 'rb') as f:
+    with open('data/conjunctions.pkl', 'rb') as f:
         conjunctions = pickle.load(f)
 
     target_train, confusion_train = {}, {}
@@ -255,10 +255,10 @@ def main():
         errors.append(test_errors)
 
     # Write the models to a pickle for future use
-    with open('models.pkl', 'wb') as f:
+    with open('results/models.pkl', 'wb') as f:
         pickle.dump(full_models, f)
 
-    with open('errors.pkl', 'wb') as f:
+    with open('results/errors.pkl', 'wb') as f:
         pickle.dump(errors, f)
 
     # for target in target_words:
