@@ -9,6 +9,7 @@ from collections import Counter
 import re
 import pickle
 import random
+import sys
 
 
 # List of target words, and words that will be incorporated into confusion set
@@ -91,31 +92,31 @@ def extract_features(data, word, with_conj=True):
     return examples
 
 
-def pickle_words():
+def pickle_words(with_conj=False):
     # Save the pre-processed feature vectors to a pickle
     d = {}
     for target in target_words:
         print(target)
-        d[target] = extract_features(newsgroups_train.data, target)
+        d[target] = extract_features(newsgroups_train.data, target, with_conj=with_conj)
     with open('data/target_train.pkl', 'wb') as f:
         pickle.dump(d, f)
     d = {}
     for con in confusion_set:
         print(con)
-        d[con] = extract_features(newsgroups_train.data, con)
+        d[con] = extract_features(newsgroups_train.data, con, with_conj=with_conj)
     with open('data/confusion_train.pkl', 'wb') as f:
         pickle.dump(d, f)
 
     d = {}
     for target in target_words:
         print(target)
-        d[target] = extract_features(newsgroups_test.data, target)
+        d[target] = extract_features(newsgroups_test.data, target, with_conj=with_conj)
     with open('data/target_test.pkl', 'wb') as f:
         pickle.dump(d, f)
     d = {}
     for con in confusion_set:
         print(con)
-        d[con] = extract_features(newsgroups_test.data, con)
+        d[con] = extract_features(newsgroups_test.data, con, with_conj=with_conj)
     with open('data/confusion_test.pkl', 'wb') as f:
         pickle.dump(d, f)
 
@@ -155,6 +156,7 @@ def main():
             X = [x for j in X for x in j]
             y = np.append(y, [[1] * len(target_train[target])])
             X = v.transform(X)
+            print(X.shape)
 
             X_test = [confusion_test[k] for k in confusion_words]
             y_test = np.array([[-1] * len([x for j in X_test for x in j])])
@@ -171,8 +173,8 @@ def main():
             test_error = clf.score(X_test, y_test)
             # print(y_test)
             # print(clf.predict(X_test))
-            print(train_error)
-            print(test_error)
+            print('Training Error: %.03f' % train_error)
+            print('Test Error: %.03f' % test_error)
             test_errors.append(test_error)
             print("success: %d" % i)
         full_models.append(models)
@@ -185,6 +187,14 @@ def main():
     with open('results/errors.pkl', 'wb') as f:
         pickle.dump(errors, f)
 
-main()
-#pickle_words()
-#print popular_words()
+if __name__ == '__main__':
+    if sys.argv[1] == 'extract':
+        pickle_words(False)
+    elif sys.argv[1] == 'extractconj':
+        pickle_words(True)
+    elif sys.argv[1] == 'train':
+        main()
+    elif sys.argv[1] == 'popular':
+        print(popular_words())
+    else:
+        print('Invalid input.')
