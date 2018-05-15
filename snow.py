@@ -1,11 +1,14 @@
 from sklearn.datasets import fetch_20newsgroups
 from sklearn import svm
 from sklearn.feature_extraction import DictVectorizer
-from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import train_test_split
+from sklearn.decomposition import PCA
 import numpy as np
 from nltk.stem.porter import PorterStemmer
 from nltk.corpus import stopwords
 from collections import Counter
+from statistics import mode
+import matplotlib.pyplot as plt
 import re
 import pickle
 import random
@@ -13,17 +16,22 @@ import sys
 
 
 # List of target words, and words that will be incorporated into confusion set
-target_words = ['government', 'university', 'church', 'people', 'american',
-                'turkish', 'college', 'division', 'israeli', 'clipper',
-                'military']
+# target_words = ['government', 'university', 'church', 'people', 'american',
+#                 'turkish', 'college', 'division', 'israeli', 'clipper',
+#                 'military', 'public']
 
-confusion_set = ['computer', 'information', 'version', 'evidence', 'president',
+target_words = ['turkish', 'christian', 'israeli', 'american', 'national',
+                'government', 'armenian', 'jewish', 'military', 'public',
+                'western', 'society', 'russian', 'washington', 'administration',
+                'country', 'president', 'political', 'toronto', 'pittsburgh']
+
+confusion_set = ['computer', 'information', 'version', 'evidence', 'communications',
                  'algorithm', 'hardware', 'software', 'technical', 'numbers',
                  'package', 'network', 'driver', 'graphics', 'internet',
                  'display', 'server', 'engineering', 'machine', 'memory']
 
 # Import the 20 newsgroups dataset
-newsgroups_train = fetch_20newsgroups(subset='train')
+newsgroups_train = fetch_20newsgroups(subset='all')
 newsgroups_test = fetch_20newsgroups(subset='test')
 
 # Lemmatizer
@@ -63,7 +71,7 @@ def popular_words():
     for word in b:
         if len(word) == 1 or not word.isalpha() or len(word) < 6:
             del cnt[word]
-    return cnt.most_common(100)
+    return cnt.most_common(400)
 
 
 def extract_features(data, word, with_conj=True):
@@ -72,12 +80,12 @@ def extract_features(data, word, with_conj=True):
                 if word in [re.sub(r'[^\w\s]', '', x) for x in s.split()]]
     for q, example in enumerate(filtered):
         example_split = example.split()
-        k = example_split.index(word)
 
         # Place padding in word
         example_split = ['START', 'START', 'START'] + \
                         [x.lower() for x in list(map(p.stem, example_split))] + \
                         ['END', 'END', 'END']
+        k = example_split.index(p.stem(word))
         window = example_split[k-3:k] + example_split[k+1:k+4]
         pos = list(range(-3,0)) + list(range(1, 4))
         features = {'w%d=%s' % (p, w) : 1 for p, w in zip(pos, window)}
@@ -132,60 +140,116 @@ def main():
         confusion_test = pickle.load(f)
 
     full_models = []
-    errors = []
+    accuracies = []
 
     # Convert features to sparse matrices
     v = DictVectorizer(sparse=True)
 
-    all_features = list(target_train.values()) + list(confusion_train.values()) + \
-                   list(target_test.values()) + list(confusion_test.values())
-    all_features = [x for i in all_features for x in i]
-    v.fit_transform(all_features)
+    # all_features = list(target_train.values()) + list(confusion_train.values()) + \
+    #                list(target_test.values()) + list(confusion_test.values())
+    # all_features = [x for i in all_features for x in i]
+    # v.fit(all_features)
 
 
-    for target in target_words:
-        print(target)
-        models = []
-        test_errors = []
+    # for target in target_words:
+    #     print(target)
+    #     models = []
+    #     test_accs = []
+    #     for i in range(2, 20):
+    #         #clf = Perceptron(verbose=10, n_iter=1)
+    #         clf = svm.LinearSVC()
+    #         confusion_words = confusion_set[:i] #random.sample(confusion_set, i)
+    #         X = [confusion_train[k] for k in confusion_words]
+    #         X = [x for j in X for x in j]
+    #         y = np.array([[-1] * len(X)])
+    #         X += target_train[target]
+    #         y = np.append(y, [[1] * len(target_train[target])])
+    #         print(len(X))
+    #         print(len(target_train[target]))
+    #         X = v.fit_transform(X)
+
+    #         X_test = [confusion_test[k] for k in confusion_words]
+    #         X_test = [x for j in X_test for x in j]
+    #         y_test = np.array([[-1] * len(X_test)])
+    #         X_test += target_test[target]
+    #         y_test = np.append(y_test, [1] * len(target_test[target]))
+    #         print(len(X_test))
+    #         print(len(target_test[target]))
+    #         X_test = v.transform(X_test)
+
+    #         # pca = PCA(n_components=2)
+    #         # a = pca.fit_transform(X.todense())
+
+    #         # print(a)
+    #         # plt.scatter(a[:,0], a[:, 1])
+    #         # plt.show()
+
+    #         clf = clf.fit(X, y)
+    #         models.append(clf)
+    #         train_acc = clf.score(X, y)
+    #         test_acc = clf.score(X_test, y_test) 
+    #         # print(y_test)
+    #         #print(clf.predict(X_test))
+    #         # print(clf.coef_.tolist())
+    #         # print(list(y_test))
+    #         # print(list(clf.predict(X_test)))
+    #         #print(list(X * clf.coef_.T + clf.intercept_))            
+    #         #print(list(d * clf.coef_.T + clf.intercept_))
+    #         #print(clf.coef_.tolist())
+    #         print('Training Accuracy: %.03f' % train_acc)
+    #         print('Test Accuracy: %.03f' % test_acc)
+    #         test_accs.append(test_acc)
+    #         print("success: %d" % i)
+    #     full_models.append(models)
+    #     accuracies.append(test_accs)
+
+
+    models = []
+    test_accs = [0] * 18
+    baselines = [0] * 18
+    for _ in range(5):
         for i in range(2, 20):
-            clf = svm.SVC(kernel='linear')
-            confusion_words = random.sample(confusion_set, i)
-            X = [confusion_train[k] for k in confusion_words]
-            y = np.array([[-1] * len([x for j in X for x in j])])
-            X.append(target_train[target])
-            X = [x for j in X for x in j]
-            y = np.append(y, [[1] * len(target_train[target])])
-            X = v.transform(X)
-            print(X.shape)
+            clf = svm.LinearSVC()
+            words = random.sample(target_words, i)
 
-            X_test = [confusion_test[k] for k in confusion_words]
-            y_test = np.array([[-1] * len([x for j in X_test for x in j])])
-            X_test.append(target_test[target])
-            X_test = [x for j in X_test for x in j]
-            y_test = np.append(y_test, [1] * len(target_test[target]))
-            X_test = v.transform(X_test)
+            X = []
+            y = []
 
-            print(cross_val_score(clf, X, y, cv=3))
+            for w in words:
+                X += target_train[w]
+                y += [w] * len(target_train[w])
 
-            clf = clf.fit(X, y)
+            X = v.fit_transform(X)
+
+            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+
+            clf = clf.fit(X_train, y_train)
+
             models.append(clf)
-            train_error = clf.score(X, y)
-            test_error = clf.score(X_test, y_test)
-            # print(y_test)
-            # print(clf.predict(X_test))
-            print('Training Error: %.03f' % train_error)
-            print('Test Error: %.03f' % test_error)
-            test_errors.append(test_error)
-            print("success: %d" % i)
-        full_models.append(models)
-        errors.append(test_errors)
+            train_acc = clf.score(X_train, y_train)
+            test_acc = clf.score(X_test, y_test)
+
+            most_common = mode(y_train)
+
+            baseline = np.sum(np.array([most_common] * len(y_train)) == np.array(y_train)) / len(y_train)
+            baselines[i - 2] += baseline
+
+            # print('Training Accuracy: %.4f' % train_acc)
+            # print('Test Accuracy: %.4f' % test_acc)
+            test_accs[i - 2] += test_acc
+
+    test_accs = [j / 5 for j in test_accs]
+    baselines = [j / 5 for j in baselines]
+    print(test_accs)
+    print(baselines)
+
 
     # Write the models to a pickle for future use
     with open('results/models.pkl', 'wb') as f:
         pickle.dump(full_models, f)
 
-    with open('results/errors.pkl', 'wb') as f:
-        pickle.dump(errors, f)
+    with open('results/accuracies.pkl', 'wb') as f:
+        pickle.dump(accuracies, f)
 
 if __name__ == '__main__':
     if sys.argv[1] == 'extract':
